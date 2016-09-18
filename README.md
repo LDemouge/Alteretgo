@@ -50,6 +50,7 @@ Si la ***UI*** ne dispose d'aucune connexion internet, elle doit être en mesure
 - Le code source nécessaire pour **retourner un `HTTPResponseHeaders`**		
 - Le code soure nécessaire pour **distribuer les messages en partance pour et émanant du [Domain Model](#domainModel)** :
 	- dans la suite de ce document, cette partie du code source sera dénommée `MessageBus`
+	- il est recommandé à l'[infrastructure technique](#infra) de décorer le `MessageBus` en `TransactionalMessageBus` pour que ce dernier gère automatiquement la persistence des [évènements](#events) à chaque transaction.
 - Le code source de type **Helpers** :
 	- ex. `Serializers`, `Validators`, `Tokenizers`, `ServiceContainers`, etc..
 - Le code source nécessaire pour **authentifier les utilisateurs**
@@ -75,8 +76,8 @@ Si la ***UI*** ne dispose d'aucune connexion internet, elle doit être en mesure
 
 > `Serializers`, `Validators`, `Tokenizers`, `ServiceContainers`, `HTTPFoundation`, `MessageBus`, `PersistenceLibrairies` etc..
 
-- il sera de la **responsabilité du Lead de l'infrastructure technique** de correctement gérer les dépendances et le versionning des librairies tierces qu'il aura décidé d'utiliser.
-- il est  **recommandé au Lead de l'infrastructure technique** ne pas consommer les librairies tierces de manière concrète mais de mettre en place une couche d'abstraction (interface) entre la libraire tierce et le consumer.
+- il sera de la **responsabilité à l'infrastructure technique** de correctement gérer les dépendances et le versionning des librairies tierces qu'elle aura décidé d'implémenter.
+- il est  **recommandé à l'infrastructure technique** ne pas consommer les librairies tierces de manière concrète mais d'implémenter une couche d'abstraction (interface) entre la libraire tierce et le consumer.
 
 
 
@@ -120,7 +121,7 @@ ____________________________________________
 > Bounded Context = Champs d'application, contexte dialectique d'un métier ou sous-métier dans lequel une solution logicielle va être apportée
 > `src/AppBundle/DomainModel/BoundedContext [./SubContext [./SubSubContext]]`
 
-Le [Domain Model](#domainModel) ne pouvant évidemment pas modelliser la globalité du [Domain](#domainModel), il s'organise en morceau, chaque morceau correspondant à un métier ou composant de métier, au sens organisationnel interne Alter&Go (RH, Gestion, Commercial, Opérations etc...), qu'il se propose de solutionner.
+Le [Domain Model](#domainModel) ne pouvant évidemment pas modelliser la globalité du [Domain](#domainModel) du Groupe Alter&Go (sans quoi il devrait modelliser la machine à café, la disponibilité des salles de réunion, l'achat de papier imprimante...), il s'organise en morceau, chaque morceau correspondant à un métier / un composant de métier / une problématique métier qu'il se propose de solutionner ; métier étant à comprendre au sens organisationnel interne Alter&Go (RH, Gestion, Commercial, Opérations etc...).
 
 Ces "morceaux" sont appelés ***Bounded Context***
 
@@ -150,7 +151,7 @@ Les ***Bounded Context*** à traiter dans le cadre de ce projet **sont au nombre
 	|			|--	Customers/								<--BC10
 	|			|--	Suppliers/								<--BC11
 	|			|--	BusinessUnits/							<--BC12
-	|			|--	Products
+	|			
 	|
     |--	OperationalBusinessUnit/
 		|--	Operations/
