@@ -1,4 +1,3 @@
-# Alteretgo
 #Cahier des charges
 ## Vocabulaire
 
