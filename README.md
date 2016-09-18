@@ -6,7 +6,7 @@
 
 ###<a name="ui">UI</a> 
 
-> (interface utilisateur)
+> Interface Utiliseur
 
 ***UI*** désigne l'ensemble des éléments à disposition d'un utilisateur pour envoyer des commandes à l'[API](#api) et  consulter l'état du domain model.
 
@@ -18,7 +18,7 @@ Le bouton back du navigateur doit renvoyer l'exact même vue que la dernière pr
 
 La ***UI*** doit refléter en temps quasi-réel l'état du [Domain Model](#domainModel), sans que l'utilisateur n'ait à recharger sa page, les informations lui sont donc pushées.
 
-La ***UI*** doit disposer de sa propre base de donnée, indépendante de l'[API](#api).
+La ***UI*** doit disposer de sa propre base de donnée, indépendante de l'[API](#api), que l'on appellera [Read Model](#readModel).
 
 Si la ***UI*** ne dispose d'aucune connexion internet, elle doit être en mesure de continuer les traitements et de se synchroniser par la suite, dès lors que la connexion est revenue, et éventuellement informé l'utilisateur des commandes que l'[API](#api) aura rejeté.
 
@@ -48,7 +48,7 @@ Si la ***UI*** ne dispose d'aucune connexion internet, elle doit être en mesure
 		- quelqu'en soit leur format (`xml`, `json`, `csv`...)
 		- sur ce projet, nous fixerons toutefois le format de réception à `json`
 - Le code source nécessaire pour **retourner un `HTTPResponseHeaders`**		
-- Le code soure nécessaire pour **distribuer les messages** émanant du [Domain Model](#domainModel) :
+- Le code soure nécessaire pour **distribuer les messages en partance pour et émanant du [Domain Model](#domainModel)** :
 	- dans la suite de ce document, cette partie du code source sera dénommée `MessageBus`
 - Le code source de type **Helpers** :
 	- ex. `Serializers`, `Validators`, `Tokenizers`, `ServiceContainers`, etc..
@@ -124,7 +124,7 @@ Le [Domain Model](#domainModel) ne pouvant évidemment pas modelliser la globali
 
 Ces "morceaux" sont appelés ***Bounded Context***
 
-Les ***Bounded Context*** à traiter dans le cadre de ce projet **sont au nombre de 17** et organisés de la manière suivante :
+Les ***Bounded Context*** à traiter dans le cadre de ce projet **sont au nombre de 18** et organisés de la manière suivante :
     
     src/AppBundle/DomainModel/ <------ Alter&Go Groupe <-- niveau macro 
 	|	
@@ -162,6 +162,7 @@ Les ***Bounded Context*** à traiter dans le cadre de ce projet **sont au nombre
 			|--	Catalogs/
 				|--	ContractsCatalog/						<--BC16
 				|--	RessourcesCatalog/						<--BC17
+				|--	ProductsCatalog/						<--BC18
 
 		
 				
@@ -241,21 +242,37 @@ __________________________________
 
 ###<a name="commands">Commands</a>
 
-*Les commandes réceptionnées par l'API qui en délègue le traitement aux aggrégats.*
 
-*Exemple : `RejectLeaveRequest` (refuser une demande d'absence).*
 
-*__Les commandes doivent pouvoir émaner de n'importe quelle source (un web browser, une application mobile, une ligne de commande...) sans que l'API n'ait à être modifiée.__*
+> Commands = les ordres donnés au [Domain Model](#domainModel).*
+
+>Exemple : `RejectLeaveRequestCommand` (Ordre de refuser une demande d'absence).
+
+Les ordres pouvant émaner de n'importe quelle source (un web browser, une application mobile, une ligne de commande, un webservice...),  sous différents formats (`xml`, `json`, `txt`...), il est de l'autorité de l'[infrastructure technique](#infra) de prévoir les différents formateurs et serializer nécessaires pour que les ordres, lorsqu'ils arrivent au [Domain Model](#domainModel), soient totalement `format and source agnostic`.
+
+Il est recommandé à l'infrastructure technique de prévoir ces opérations avant d'envoyer les ordres sur le `MessageBus`.
+
+
+
+
 
 ---
 ###<a name="commandHandlers">Command Handlers</a>
 
-Les [CommandHandlers](#commandHandlers) vérifient la conformité des [commandes](#commands) puis au choix :
+> Il existe un et un seul [CommandHandler](#commandHandlers) par [Command](#commands).
+> 
+> Il n'y a pas de [Command](#commands) sans [CommandHandler](#commandHandlers).
 
-- les rejettent si elles ne sont pas conformes
-- les adressent à leurs [Aggregates](#ar) si elles sont conformes puis au choix :
-	- retournent une `\Exception` si l'[Aggregate](#ar) a refusé de traiter la [Command](#commands)
-	- récupèrent les évènements émis par l'[Aggregate](#ar) lorsque celui-ci a fini de traiter la [Command](#commands) et les retournent au `MessageBus`.
+Le rôle des [CommandHandlers](#commandHandlers) est de :
+
+
+-  vérifier que les [Commands](#commands) ne sont pas incomplètes ou malformée.
+- Si elles le sont, ils les rejettent
+- Sinon,
+	- ils les adressent à l' [Aggregate](#ar) pour exécution.
+	- ils récupèrent et transmettent le résultat de l'exécution de l' [Aggregate](#ar) vers le `MessageBus`.
+
+Il est recommandé à l'infrastructure technique d'injecter le `MessageBus` dans les [CommandHandlers](#commandHandlers).
 
 ---
 ###<a name="ar">Aggregates & Aggregate Roots</a>
@@ -264,43 +281,67 @@ Les [CommandHandlers](#commandHandlers) vérifient la conformité des [commandes
 
 > **Toute la logique métier du [Domain Model](#domainModel) doit être traitée au sein des *Aggregates***
 > 
-> Un **Aggregate**  est un ensemble abstrait, une agglomération d'entités métier concrêtes (ex. un collaborateur, un client, une facture...) ayant besoin les unes des autres pour travailler ensemble.
+> Un **Aggregate**  est un ensemble abstrait, une agglomération d'entités métier concrêtes (ex. un collaborateur, un client, une facture...) dépendant les une des autres pour accomplir une tâche métier spécifique.
 > 
 > La communication avec un *Aggregate* ne peut se faire que par le biais de son **Aggregate Root**
 > 
-> Un *Aggregate root* a l'autorité exclusive sur le comportement métier des entités de l'*Aggregate*.
+> Un *Aggregate root* a l'autorité exclusive sur le comportement des entités de son *Aggregate*.
+> 
+> Un *Aggregate root* est garant du cycle de vie de son *Aggregate*
 > 
 > Un *Aggregate root* doit pouvoir être supprimé, remplacé, étendu sans qu'aucune modification de code ne soit nécessaire ailleurs que dans cet aggrégat
 
-Un *Aggregate root* est une entité concrète dotée de l'autorité exclusive sur le comportement des entités aggrégées dans l'aggregats.
+Un *Aggregate root* est une entité concrète dotée de l'exclusive autorité  sur le comportement des entités aggrégées dans l'*Aggregate*.
 
-C'est aux aggrégats que le MessageBus adresse les [commandes](#commands) réceptionnées par [l'infrastructure technique](#api).
+C'est aux *Aggregates* que les [CommandHandlers](#commandHandlers) adressent les [commandes](#commands) qu'ils ont reçu du `MessageBus`.
 
-Ensuite, soit l'***Aggregate*** acceptent de traiter la commande, auquel cas il produisent un événement qui sera persisté puis dispatché, soit ils le refusent auquel cas ils renvoient une `\Exception`
+Lorsqu'un *Aggregate Root* accepte de traiter une [Command](#commands), il l'exécute puis émet un ou plusieurs [Domain Event ](#events) relatant l'opération qu'il vient d'exécuter.
 
-
-
-
+Un *Aggregate Root* peut et doit refuser d'exécuter une [Command](#commands) si cette dernière n'est pas compatible avec le comportement et le cycle de vie attendu de son *Aggregate* :
 
 
-###<a name="events">Events</a> 
+- Par exemple, si `EmployeeAggregate` reçoit la commande `IncreaseSalaryCommand` alors qu'il est au statut `EmployeeFired`
 
-> (évènements produits)
+- Dans ce cas, il doit se contenter d'émettre  une `\Exception`:
+
+
+**Il est recommandé [au responsable de la UI](#ui) d'effectuer un maximum de vérification en amont pour que les commandes arrivant aux aggrégats aient une probabilité minimale d'être rejetée. Ce pré-requis devrait être facilité que les informations sont pushés sur la [UI](#ui)**
+
+
+
+
+
+----
+
+
+###<a name="events">Domain Events</a> 
+
+> Evénements métier produit par les *Aggregates*
 
 Exemple : `LeaveRequestRejected` (demande d'absence refusée).*
 
-*une commande, lorsqu'elle est acceptée, génère un évènement (par le biais de l'aggrégat) qui :
+ une commande, lorsqu'elle est acceptée, génère un évènement (par le biais de l'aggrégat) qui :
 
 - est propagé dans la [UI](#ui) par le biais de `Denormalizers`
 - est capté par les agents de communication inter-aggrégats, les `Sagas` ou `Process managers`
-    
 
+
+    
+----
 ###<a name="sagas">Process Managers (aka. Sagas)</a>
 
-tbd
+> Les [sagas](#sagas) permettent d'attendre qu'une certaine configuration d'[évènements](#events) se soit produite pour émettre à leur tour une [Command](#Command).
 
+*to be completed...*
+
+----
 ###<a name="denorm">Denormalizers</a>
-tbd
+> les [Denormalizers](#denorm) réagissent aux [évènements](#events) en créant un jeu de données à transmettre au [Read Model](#readModel) pour mise-à-jour.
 
- 
+*to be completed...*
 
+---
+###<a name="readModel">Read Model</a>
+> le Read Model désigne la (les) base(s) de données auquel accède le(s) composant(s) de la UI pour afficher l'état du Domain Model. 
+
+*to be completed...*
