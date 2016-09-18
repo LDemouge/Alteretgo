@@ -58,7 +58,7 @@ Si la ***UI*** ne dispose d'aucune connexion internet, elle doit être en mesure
 	- avec ou sans librairie d'ObjectMapping
 - le code source permettant de **persiter des données dans la ou les base(s) de données UI**
 - le code source permettant de **pré-autoriser les requêtes HTTP** :
-	- dans le cadre de ce projet, ce code source se contentera la plupart du temps de rejeter les visiteurs anonymes
+	- dans le cadre de ce projet, ce code source se contentera la plupart du temps de rejeter les utilisateurs non-authentifiés
 	- C'est en effet le [Domain Model](#domainModel) qui a autorité sur les autorisations, ces dernières faisant partie intégrale de la logique métier	
 
 
@@ -67,6 +67,7 @@ Si la ***UI*** ne dispose d'aucune connexion internet, elle doit être en mesure
 - de code source traitant les requêtes HTTP(S) `GET`, `PUT`, `PATCH`, `DELETE`
 - de code source retournant un `HTTPResponseBody`
 - de code source contenant de la logique métier
+- de code source refusant l'autorisation à une Command que le Domain Model aurait accepté.
 
 
 **L'infrastructure technique peut avoir des dépendances vers des librairies techniques tierces :**
@@ -114,47 +115,53 @@ Toujours par convention, nous considérerons que le repertoire `Domain Model` se
 ____________________________________________
 
 
-###<a name="BC">BC -- Bounded Context</a> 
+###<a name="BC">Bounded Context</a> 
 
-> Bounded Context = Champs d'application, contexte dialectique d'un métier ou sous-métier
+> Bounded Context = Champs d'application, contexte dialectique d'un métier ou sous-métier dans lequel une solution logicielle va être apportée
 > `src/AppBundle/DomainModel/BoundedContext [./SubContext [./SubSubContext]]`
 
-Le [Domain Model](#domainModel) ne pouvant évidemment pas solutionner la globalité du [Domain](#domainModel), il s'organise en morceau, chaque morceau correspondant à un métier ou composant de métier au sens organisationnel interne Alter&Go (RH, Gestion, Commercial, Opérations etc...).
+Le [Domain Model](#domainModel) ne pouvant évidemment pas modelliser la globalité du [Domain](#domainModel), il s'organise en morceau, chaque morceau correspondant à un métier ou composant de métier, au sens organisationnel interne Alter&Go (RH, Gestion, Commercial, Opérations etc...), qu'il se propose de solutionner.
 
 Ces "morceaux" sont appelés ***Bounded Context***
 
-Les ***Bounded Context*** à traiter dans le cadre de ce projet **sont au nombre de 16** et organisés de la manière suivante :
+Les ***Bounded Context*** à traiter dans le cadre de ce projet **sont au nombre de 17** et organisés de la manière suivante :
     
     src/AppBundle/DomainModel/ <------ Alter&Go Groupe <-- niveau macro 
-		
-		AlterEtGoGroup/
-				HumanRessources/  
-					EmployeesCatalog/				<--BC1
-					HRManagement/					<--BC2
-					Leaves/							<--BC3
-					Evaluations/					<--BC4
-
-				Finances/
-					Purchasing/						<--BC5
-					Invoicing/						<--BC6
-
-				ActivityManagement/
-					ActivityReporters/				<--BC7
-					ActivityReport/					<--BC8
-					ActivitiesCatalog/				<--BC9
-
-				Catalogs/
-					Customers/						<--BC10
-					Suppliers/						<--BC11
-					BusinessUnits/					<--BC12
-
-    	OperationalBusinessUnit/
-			Operations/
-				RevenueManagement/					<--BC13
-				PurchasingManagement/				<--BC14
-				Catalogs/
-					ContractsCatalog/				<--BC15
-					RessourcesCatalog/				<--BC16
+	|	
+	|--	AlterEtGoGroup/
+	|	|-------HumanRessources/  
+	|	|		|---EmployeesCatalog/						<--BC1
+	|	|		|---HRManagement/							<--BC2
+	|	|		|---Leaves/									<--BC3
+	|	|		|---Evaluations/							<--BC4
+	|	|
+	|	|------	Finances/
+	|	|		|--	RefundableExpenseManagement/			<--BC5
+	|	|		|--	Invoicing/
+	|	|			|--	CustomerInvoicing/
+	|	|			|	|--	PerformanceInvoicing/			<--BC6
+	|	|			|	|--	RechargeableExpenseInvoicing/	<--BC7
+	|	|			|--	InternalInvoicing/					<--BC8
+	|	|
+	|	|------	ActivityManagement/
+	|	|		|--	ActivityReport/							<--BC9
+	|	|			
+	|	|------	Catalogs/
+	|			|--	Customers/								<--BC10
+	|			|--	Suppliers/								<--BC11
+	|			|--	BusinessUnits/							<--BC12
+	|			|--	Products
+	|
+    |--	OperationalBusinessUnit/
+		|--	Operations/
+			|--	RevenueManagement/
+			|	|--	FeesCharging/							<--BC13
+			|	|--	OutsourcedDeliveriesCharging/			<--BC14
+			|	|--	ProductLeasing/							<--BC15
+			|	
+			|--	Catalogs/
+				|--	ContractsCatalog/						<--BC16
+				|--	RessourcesCatalog/						<--BC17
 
 		
 				
@@ -176,6 +183,8 @@ En définissant les bounded context et sub-context comme racine de l'arborescenc
 > Autonomous components = Composants logiciels autonomes
 > 
 > Les Autonomous Components apportent une solution logicielle aux problématiques métier et organisationnelle identifiées dans un [bounded context](#BC).
+> 
+> La modification, la suppression ou le remplacement d'un Autonomous Component ne doit avoir aucun impact sur un autre Autonomous Component
 
 Un Bounded Context peut donc être composé de un (souvent) ou plusieurs (rarement) Autonomous Components.
 
@@ -186,17 +195,17 @@ Un Bounded Context peut donc être composé de un (souvent) ou plusieurs (rareme
 							EmployeesCatalogComponent/			<--AC1 <-- Autonomous Component 1
 
 				
-***Par autonome, on désigne le fait qu'un composant doit pouvoir être étendu, supprimé, remplacé par un ou plusieurs autre(s), sans que le code d'un autre composant ne soit affecté.***
+**Par autonome, on désigne le fait qu'un composant doit pouvoir être étendu, supprimé, remplacé par un ou plusieurs autre(s), sans que le code d'un autre composant ne soit affecté.**
 
 	
-Un Autonomous Component reçoit des [commandes](#commands) en provenance du `MessageBus` par l'intermédiaire de ses [CommandHandlers](#commandHandlers).
+Un Autonomous Component reçoit des messages  en provenance du `MessageBus` :
 
-Les 
-un voir plusieurs aggrégats qui reçoivent des commandes, les traite, et émettent un évènement décrivant l'action qu'ils viennent d'accomplir
-des commandes, les instructions qu'on veut donner au système
+- soit par l'intermédiaire de ses [CommandHandlers](#commandHandlers) s'il s'agit de [commandes](#commands)
+- soit par l'intermédiaire de ses [Process Managers](#sagas) s'il s'agit d'[évènements](#events), émis par un autre *Autonomous Component*, auquel il a décidé de souscrire.
 
+Un Autonomous Component émet des message vers le `MessageBus`
 
-Un Autonomous components est organisé de la manière suivante :
+Par convention, nous considérerons qu'un Autonomous components est organisé de la manière suivante :
 
     src/AppBundle/DomainModel/AlterEtGoGroup/HumanRessources/EmployeesCatalog/
 		
@@ -224,32 +233,11 @@ Un Autonomous components est organisé de la manière suivante :
 				processManager1.php
 				...
    			Denormalizers/
-				employeesListDenormalizer.php			<--- 
+				employeesListViewDenormalizer.php			<--- 
 				employeeViewDenormalizer.php
 				...
 
 __________________________________
-
-###<a name="ar">Aggregates & Aggregate Roots</a>
-
-
-> Un **Aggregate**  est un ensemble abstrait, un agglomération d'entités métier concrêtes (ex. un collaborateur, un client, une facture...) ayant besoin les unes des autres pour travailler ensemble au sein d'un [Autonomous Component](#ac)
-> 
-> Un **Aggregate root** est une entité concrète dotée de l'autorité exclusive sur le comportement des entités aggrégées dans l'aggregats.
-> 
-> La communication avec un **Aggregate** ne peut se faire que par le biais de son **Aggregate Root**
-
-
-
-C'est aux aggrégats que le MessageBus adresse les [commandes](#commands) réceptionnées par [l'infrastructure technique](#api).
-
-Ensuite, soit l'***Aggregate*** acceptent de traiter la commande, auquel cas il produisent un événement qui sera persisté puis dispatché, soit ils le refusent auquel cas ils renvoient une `\Exception`
-
-*Un aggrégat doit pouvoir être supprimé, remplacé, étendu sans qu'aucune modification de code ne soit nécessaire ailleurs que dans cet aggrégat*
-
-###<a name="commandHandlers">Command Handlers</a>
-
-tbd
 
 ###<a name="commands">Commands</a>
 
@@ -258,6 +246,42 @@ tbd
 *Exemple : `RejectLeaveRequest` (refuser une demande d'absence).*
 
 *__Les commandes doivent pouvoir émaner de n'importe quelle source (un web browser, une application mobile, une ligne de commande...) sans que l'API n'ait à être modifiée.__*
+
+---
+###<a name="commandHandlers">Command Handlers</a>
+
+Les [CommandHandlers](#commandHandlers) vérifient la conformité des [commandes](#commands) puis au choix :
+
+- les rejettent si elles ne sont pas conformes
+- les adressent à leurs [Aggregates](#ar) si elles sont conformes puis au choix :
+	- retournent une `\Exception` si l'[Aggregate](#ar) a refusé de traiter la [Command](#commands)
+	- récupèrent les évènements émis par l'[Aggregate](#ar) lorsque celui-ci a fini de traiter la [Command](#commands) et les retournent au `MessageBus`.
+
+---
+###<a name="ar">Aggregates & Aggregate Roots</a>
+
+
+
+> **Toute la logique métier du [Domain Model](#domainModel) doit être traitée au sein des *Aggregates***
+> 
+> Un **Aggregate**  est un ensemble abstrait, une agglomération d'entités métier concrêtes (ex. un collaborateur, un client, une facture...) ayant besoin les unes des autres pour travailler ensemble.
+> 
+> La communication avec un *Aggregate* ne peut se faire que par le biais de son **Aggregate Root**
+> 
+> Un *Aggregate root* a l'autorité exclusive sur le comportement métier des entités de l'*Aggregate*.
+> 
+> Un *Aggregate root* doit pouvoir être supprimé, remplacé, étendu sans qu'aucune modification de code ne soit nécessaire ailleurs que dans cet aggrégat
+
+Un *Aggregate root* est une entité concrète dotée de l'autorité exclusive sur le comportement des entités aggrégées dans l'aggregats.
+
+C'est aux aggrégats que le MessageBus adresse les [commandes](#commands) réceptionnées par [l'infrastructure technique](#api).
+
+Ensuite, soit l'***Aggregate*** acceptent de traiter la commande, auquel cas il produisent un événement qui sera persisté puis dispatché, soit ils le refusent auquel cas ils renvoient une `\Exception`
+
+
+
+
+
 
 ###<a name="events">Events</a> 
 
@@ -271,8 +295,11 @@ Exemple : `LeaveRequestRejected` (demande d'absence refusée).*
 - est capté par les agents de communication inter-aggrégats, les `Sagas` ou `Process managers`
     
 
-###<a name="sagas">Sagas and process managers et collaboration inter-aggrégats</a>
+###<a name="sagas">Process Managers (aka. Sagas)</a>
 
+tbd
+
+###<a name="denorm">Denormalizers</a>
 tbd
 
  
